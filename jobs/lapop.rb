@@ -11,6 +11,8 @@ soda_client = SODA::Client.new({
   app_token: ENV['SOCRATA_APP_TOKEN']
 })
 
+LATEST_YEAR = 2012
+
 # mappings from code => value (from data dictionary which is a PDF)
 DATA_DICTIONARY = {
   # "museum_type" => {
@@ -60,59 +62,68 @@ DATA_DICTIONARY = {
   # }
 }
 
-SCHEDULER.every '5m', first_in: 0 do |job|
+SCHEDULER.every '1m', first_in: 0 do |job|
 
-  # # #### COUNT BY MUSUEM TYPE ####
-  # # Construct SODA query
-  # count_by_type_response = soda_client.get(dataset_resource_id, {
-  #   "$group" => "museum_type",
-  #   "$select" => "museum_type, COUNT(*) AS n"
-  # })
-  # # Formulate list
-  # count_by_type = {}
-  # count_by_type_response.each do |item|
-  #   type_humanized = DATA_DICTIONARY["museum_type"][item.museum_type]
-  #   count_by_type[type_humanized] = {:label => type_humanized, :value => item.n}
-  # end
-  # # Send event to dashboard
-  # send_event('count_by_type', { items: count_by_type.values.sort_by{|x| x[:value].to_i}.reverse })
+  #### COUNT BY YEAR ####
+  count_by_year_response = soda_client.get(dataset_resource_id, {
+    "$group" => "year_date",
+    "$select" => "year_date, COUNT(*) AS n",
+  })
+  count_by_year = {}
+  count_by_year_response.each do |item|
+    count_by_year[item.year_date] = {:label => item.year_date, :value => item.n}
+  end
+  send_event('count_by_year', { items: count_by_year.values })
 
 
-  # #### TOTAL SURVEYS ####
+  #### TOTAL SURVEYS ####
   total_surveys_response = soda_client.get(dataset_resource_id, {
     "$select" => "count(*)"
   })
   total_surveys = total_surveys_response.first["count"].to_i
   send_event('total_surveys', { current:  total_surveys})
 
-
-  # #### TOTAL NONPROFIT ####
-  # total_nonprofit_response = soda_client.get(dataset_resource_id, {
-  #   "$where" => "ein is not null",
-  #   "$select" => "count(*)"
-  # })
-  # total_nonprofit = total_nonprofit_response.first["count"]
-  # send_event('total_nonprofit', { current:  total_nonprofit})
-
-
-  # # #### PERCENT NONPROFIT ####
-  # percent_nonprofit = ((total_nonprofit.to_f/total_museums.to_f)*100).to_i
-  # send_event('percent_nonprofit', { value:  percent_nonprofit})
+  #### TOTAL SURVEYS BY YEAR ####
+  years_of_data_response = soda_client.get(dataset_resource_id, {
+    "$select" => "year_date,count(*)",
+    "$group" => "year_date",
+    "$order" => "year_date asc"
+  })
+  years_of_data = years_of_data_response.count
+  send_event('years_of_data', { current:  years_of_data})
 
 
-  # #### COUNT BY STATE ####
-  # count_by_state_response = soda_client.get(dataset_resource_id, {
-  #   "$group" => "state",
-  #   "$select" => "state, COUNT(*) AS n"
-  # })
-  # count_by_state = {}
-  # count_by_state_response.each do |item|
-  #   count_by_state[item.state] = {:label => item.state, :value => item.n}
-  # end
-  # count_by_state_in_order = count_by_state.values.sort_by{|x| x[:value].to_i}.reverse
-  # # Stitch together top/bottom resuts
-  # count_by_state_to_send = count_by_state_in_order[0,8]+[{:label => "..."}]+count_by_state_in_order[-8,8]
-  # # Send event to dashboard
-  # send_event('count_by_state', { items: count_by_state_to_send })
+  #### TOTAL MALE ####
+  total_2012_male_response = soda_client.get(dataset_resource_id, {
+    "$where" => "year_num = 2012 AND q1 = 'Hombre'",
+    "$select" => "count(*)"
+  })
+  total_2012_male = total_2012_male_response.first["count"]
+  send_event('total_2012_male', { current:  total_2012_male})
 
+  total_2012_response = soda_client.get(dataset_resource_id, {
+    "$where" => "year_num = 2012",
+    "$select" => "count(*)"
+  })
+  total_2012 = total_2012_response.first["count"]
+
+  #### PERCENT MALE ####
+  percent_2012_male = ((total_2012_male.to_f/total_2012.to_f)*100).to_i
+  send_event('percent_2012_male', { value:  percent_2012_male})
+
+  #### COUNT BY TOP CONCERNS ####
+  count_by_concern_response = soda_client.get(dataset_resource_id, {
+    "$where" => "year_num = 2012 AND a4 != 'NA'",
+    "$group" => "a4",
+    "$select" => "a4, COUNT(*) AS n",
+    "$order" => "n desc",
+    "$limit" => 7
+  })
+  count_by_concern = {}
+  count_by_concern_response.each do |item|
+    count_by_concern[item.a4] = {:label => item.a4, :value => item.n}
+  end
+  send_event('count_by_concern', { items: count_by_concern.values })
+  puts count_by_concern.inspect
+  puts "x"
 end
