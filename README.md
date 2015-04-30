@@ -1,3 +1,5 @@
+Based on `museum-dash` 
+
 Stock http://shopify.github.com/dashing install plus:
 - added dashing-contrib (https://github.com/QubitProducts/dashing-contrib) for its additions
 - removed several jobs and dashboards that were not needed for this project
